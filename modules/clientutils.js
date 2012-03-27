@@ -48,6 +48,72 @@
             41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, -1, -1, -1, -1, -1
         );
 
+        this.base64encode = function(str) {
+            var out = "", i = 0, len = str.length, c1, c2, c3;
+            while (i < len) {
+                c1 = str.charCodeAt(i++) & 0xff;
+                if (i == len) {
+                    out += BASE64_ENCODE_CHARS.charAt(c1 >> 2);
+                    out += BASE64_ENCODE_CHARS.charAt((c1 & 0x3) << 4);
+                    out += "==";
+                    break;
+                }
+                c2 = str.charCodeAt(i++);
+                if (i == len) {
+                    out += BASE64_ENCODE_CHARS.charAt(c1 >> 2);
+                    out += BASE64_ENCODE_CHARS.charAt(((c1 & 0x3)<< 4) | ((c2 & 0xF0) >> 4));
+                    out += BASE64_ENCODE_CHARS.charAt((c2 & 0xF) << 2);
+                    out += "=";
+                    break;
+                }
+                c3 = str.charCodeAt(i++);
+                out += BASE64_ENCODE_CHARS.charAt(c1 >> 2);
+                out += BASE64_ENCODE_CHARS.charAt(((c1 & 0x3) << 4) | ((c2 & 0xF0) >> 4));
+                out += BASE64_ENCODE_CHARS.charAt(((c2 & 0xF) << 2) | ((c3 & 0xC0) >> 6));
+                out += BASE64_ENCODE_CHARS.charAt(c3 & 0x3F);
+            }
+            return out;
+        };
+
+        this.base64encodeArrayBuffer = function(arrayBuffer) {
+            var base64 = '';
+            var encodings = BASE64_ENCODE_CHARS;
+            var bytes = new Uint8Array(arrayBuffer);
+            var byteLength = bytes.byteLength;
+            var byteRemainder = byteLength % 3;
+            var mainLength = byteLength - byteRemainder;
+            var a, b, c, d;
+            var chunk;
+            // Main loop deals with bytes in chunks of 3
+            for (var i = 0; i < mainLength; i = i + 3) {
+                // Combine the three bytes into a single integer
+                chunk = (bytes[i] << 16) | (bytes[i + 1] << 8) | bytes[i + 2];
+                // Use bitmasks to extract 6-bit segments from the triplet
+                a = (chunk & 16515072) >> 18; // 16515072 = (2^6 - 1) << 18
+                b = (chunk & 258048) >> 12;   // 258048   = (2^6 - 1) << 12
+                c = (chunk & 4032) >> 6;      // 4032     = (2^6 - 1) << 6
+                d = chunk & 63;               // 63       = 2^6 - 1
+                // Convert the raw binary segments to the appropriate ASCII encoding
+                base64 += encodings[a] + encodings[b] + encodings[c] + encodings[d];
+            }
+            // Deal with the remaining bytes and padding
+            if (byteRemainder == 1) {
+                chunk = bytes[mainLength];
+                a = (chunk & 252) >> 2;    // 252   = (2^6 - 1) << 2
+                // Set the 4 least significant bits to zero
+                b = (chunk & 3) << 4;      // 3     = 2^2 - 1
+                base64 += encodings[a] + encodings[b] + '==';
+            } else if (byteRemainder == 2) {
+                chunk = (bytes[mainLength] << 8) | bytes[mainLength + 1];
+                a = (chunk & 64512) >> 10; // 64512 = (2^6 - 1) << 10
+                b = (chunk & 1008) >> 4;   // 1008  = (2^6 - 1) << 4
+                // Set the 2 least significant bits to zero
+                c = (chunk & 15) << 2;     // 15    = 2^4 - 1
+                base64 += encodings[a] + encodings[b] + encodings[c] + '=';
+            }
+            return base64;
+        };
+
         /**
          * Clicks on the DOM element behind the provided selector.
          *
@@ -118,34 +184,11 @@
          * Base64 encodes a string, even binary ones. Succeeds where
          * window.btoa() fails.
          *
-         * @param  String  str  The string content to encode
+         * @param  String  source  The source to encode
          * @return string
          */
-        this.encode = function(str) {
-            var out = "", i = 0, len = str.length, c1, c2, c3;
-            while (i < len) {
-                c1 = str.charCodeAt(i++) & 0xff;
-                if (i == len) {
-                    out += BASE64_ENCODE_CHARS.charAt(c1 >> 2);
-                    out += BASE64_ENCODE_CHARS.charAt((c1 & 0x3) << 4);
-                    out += "==";
-                    break;
-                }
-                c2 = str.charCodeAt(i++);
-                if (i == len) {
-                    out += BASE64_ENCODE_CHARS.charAt(c1 >> 2);
-                    out += BASE64_ENCODE_CHARS.charAt(((c1 & 0x3)<< 4) | ((c2 & 0xF0) >> 4));
-                    out += BASE64_ENCODE_CHARS.charAt((c2 & 0xF) << 2);
-                    out += "=";
-                    break;
-                }
-                c3 = str.charCodeAt(i++);
-                out += BASE64_ENCODE_CHARS.charAt(c1 >> 2);
-                out += BASE64_ENCODE_CHARS.charAt(((c1 & 0x3) << 4) | ((c2 & 0xF0) >> 4));
-                out += BASE64_ENCODE_CHARS.charAt(((c2 & 0xF) << 2) | ((c3 & 0xC0) >> 6));
-                out += BASE64_ENCODE_CHARS.charAt(c3 & 0x3F);
-            }
-            return out;
+        this.encode = function(source) {
+            return this.base64encodeArrayBuffer(source);
         };
 
         /**
@@ -271,8 +314,11 @@
          * @param  Object  data    The request data, optional
          * @return String          Base64 contents string
          */
-        this.getBase64 = function(url, method, data) {
-            return this.encode(this.getBinary(url, method, data));
+        this.getBase64 = function(url, method, data, cb) {
+            var self = this;
+            this.getBinary(url, method, data, function(arrayBuffer) {
+                cb(self.encode(arrayBuffer));
+            });
         };
 
         /**
@@ -284,17 +330,14 @@
          * @param  Object  data
          * @return string
          */
-        this.getBinary = function(url, method, data) {
+        this.getBinary = function(url, method, data, cb) {
             try {
                 var xhr = new XMLHttpRequest(), dataString = "";
                 if (typeof method !== "string" || ["GET", "POST"].indexOf(method.toUpperCase()) === -1) {
                     method = "GET";
-                } else {
-                    method = method.toUpperCase();
                 }
-                xhr.open(method, url, false);
+                xhr.open(method.toUpperCase(), url, false);
                 this.log("getBinary(): Using HTTP method: '" + method + "'", "debug");
-                xhr.overrideMimeType("text/plain; charset=x-user-defined");
                 if (method === "POST") {
                     if (typeof data === "object") {
                         var dataList = [];
@@ -306,8 +349,12 @@
                     }
                     xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
                 }
+                xhr.responseType = 'arraybuffer';
+                var self = this;
+                xhr.onload = function(event) {
+                    cb(event.currentTarget.response);
+                };
                 xhr.send(method === "POST" ? dataString : null);
-                return xhr.responseText;
             } catch (e) {
                 if (e.name === "NETWORK_ERR" && e.code === 101) {
                     this.log("getBinary(): Unfortunately, casperjs cannot make cross domain ajax requests", "warning");

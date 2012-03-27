@@ -334,21 +334,30 @@ Casper.prototype.die = function die(message, status) {
 };
 
 /**
- * Downloads a resource and saves it on the filesystem.
+ * Downloads a resource and saves it onto the filesystem.
  *
  * @param  String  url         The url of the resource to download
  * @param  String  targetPath  The destination file path
  * @return Casper
  */
 Casper.prototype.download = function download(url, targetPath) {
-    var cu = require('clientutils').create();
-    try {
-        fs.write(targetPath, cu.decode(this.base64encode(url)), 'w');
-        this.emit('downloaded.file', targetPath);
-        this.log(f("Downloaded and saved resource in %s", targetPath));
-    } catch (e) {
-        this.log(f("Error while downloading %s to %s: %s", url, targetPath, e), "error");
-    }
+    this.evaluate(function(url) {
+        __utils__.getBase64(url, 'GET', undefined, function(base64) {
+            window.__casper_dl = base64;
+        });
+    }, { url: url });
+    this.waitFor(function() { // testFx
+        return this.getGlobal('__casper_dl');
+    }, function() { // then
+        var cu = require('clientutils').create();
+        try {
+            fs.write(targetPath, cu.decode(this.getGlobal('__casper_dl')), 'w');
+            this.emit('downloaded.file', targetPath);
+            this.log(f("Downloaded and saved resource in %s", targetPath));
+        } catch (e) {
+            this.log(f("Error while downloading %s to %s: %s", url, targetPath, e), "error");
+        }
+    });
     return this;
 };
 
