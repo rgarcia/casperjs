@@ -6,6 +6,7 @@ if (!phantom.casperLoaded) {
 var fs = require('fs');
 var utils = require('utils');
 var f = utils.format;
+var tests = [];
 var casper = require('casper').create({
     faultTolerant: false
 });
@@ -21,8 +22,6 @@ casper.setFilter('open.location', function(location) {
     }
     return location;
 });
-
-var tests = [];
 
 if (casper.cli.args.length) {
     tests = casper.cli.args.filter(function(path) {

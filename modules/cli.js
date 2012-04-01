@@ -34,7 +34,7 @@ var utils = require('utils');
  * Extracts, normalize ad organize PhantomJS CLI arguments in a dedicated
  * Object.
  *
- * @param  array  phantomArgs  phantom.args value
+ * @param  array  phantomArgs  The list of arguments passed to the script
  * @return Object
  */
 exports.parse = function(phantomArgs) {
