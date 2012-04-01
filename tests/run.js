@@ -1,5 +1,5 @@
 if (!phantom.casperLoaded) {
-    console.log('This script must be invoked using the casperjs executable');
+    console.error('This script must be invoked using the casperjs executable');
     phantom.exit(1);
 }
 

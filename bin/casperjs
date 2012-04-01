@@ -30,7 +30,9 @@
  *
  */
 
-phantom.loadCasper = function() {
+var system = require('system');
+
+phantom.loadCasper = function loadCasper() {
     // Patching fs
     // TODO: watch for these methods being implemented in official fs module
     var fs = (function(fs) {
@@ -61,7 +63,7 @@ phantom.loadCasper = function() {
     // casper root path
     if (!phantom.casperPath) {
         try {
-            var executable = fs.pathJoin(phantom.libraryPath, phantom.scriptName);
+            var executable = system.args[0];
             while (fs.isLink(executable)) {
                 executable = fs.readLink(executable);
             }
@@ -279,8 +281,8 @@ phantom.loadCasper = function() {
     // BC < 0.6
     phantom.Casper = require('casper').Casper;
 
-    // casper cli args
-    phantom.casperArgs = require('cli').parse(phantom.args);
+    // casper cli args (sliced because system.args[0] is the current script name)
+    phantom.casperArgs = require('cli').parse(system.args.slice(1));
 
     // loaded status
     phantom.casperLoaded = true;
@@ -293,8 +295,8 @@ phantom.initCasperCli = function() {
         console.log(phantom.casperVersion.toString());
         phantom.exit(0);
     } else if (phantom.casperArgs.get(0) === "test") {
-        phantom.casperScript = fs.absolute(fs.pathJoin(phantom.casperPath, 'tests', 'run.js'));
         phantom.casperArgs.drop("test");
+        phantom.injectJs(fs.absolute(fs.pathJoin(phantom.casperPath, 'tests', 'run.js')));
     } else if (!!phantom.casperArgs.get('help')) {
         var phantomVersion = [phantom.version.major, phantom.version.minor, phantom.version.patch].join('.');
         var f = require("utils").format;
@@ -312,7 +314,6 @@ phantom.initCasperCli = function() {
             console.error('Unable to open file: ' + phantom.casperScript);
             phantom.exit(1);
         }
-
 
         // filter out the called script name from casper args
         phantom.casperArgs.drop(phantom.casperScript);
