@@ -64,16 +64,20 @@ phantom.loadCasper = function loadCasper() {
     if (!phantom.casperPath) {
         try {
             var executable = system.args[0];
-            while (fs.isLink(executable)) {
-                executable = fs.readLink(executable);
+            if (executable) {
+                while (fs.isLink(executable)) {
+                    executable = fs.readLink(executable);
+                }
+                phantom.casperPath = fs.absolute(fs.pathJoin(fs.dirname(executable), '..'));
+            } else if (system.env['CASPER_PATH'].trim()) {
+                phantom.casperPath = system.env['CASPER_PATH'];
             }
-            phantom.casperPath = fs.absolute(fs.pathJoin(fs.dirname(executable), '..'));
         } catch (e) {}
     }
 
-    if (!phantom.casperPath) {
+    if (!phantom.casperPath || !fs.isDirectory(phantom.casperPath)) {
         console.error("Couldn't find nor compute phantom.casperPath, exiting.");
-        phantom.exit(1);
+        system.exit(1);
     }
 
     // Embedded, up-to-date, validatable & controlable CoffeeScript
@@ -214,7 +218,7 @@ phantom.loadCasper = function loadCasper() {
      * TODO: remove when PhantomJS has full module support
      */
     require = (function(require, requireDir) {
-        var phantomBuiltins = ['fs', 'webpage', 'webserver'];
+        var phantomBuiltins = ['fs', 'system', 'webpage', 'webserver'];
         var phantomRequire = phantom.__orig__require = require;
         var requireCache = {};
         return function(path) {
@@ -282,7 +286,31 @@ phantom.loadCasper = function loadCasper() {
     phantom.Casper = require('casper').Casper;
 
     // casper cli args (sliced because system.args[0] is the current script name)
+    var nativeOptionsMap = {
+        'cookies-file':               undefined,
+        'disk-cache':                 undefined,
+        'ignore-ssl-errors':          'ignoreSslErrors',
+        'load-images':                'loadImages',
+        'local-to-remote-url-access': 'localToRemoteUrlAccessEnabled',
+        'max-disk-cache-size':        undefined,
+        'output-encoding':            undefined,
+        'proxy':                      undefined,
+        'proxy-auth':                 undefined,
+        'proxy-type':                 undefined,
+        'script-encoding':            undefined,
+        'web-security':               'webSecurityEnabled'
+    };
     phantom.casperArgs = require('cli').parse(system.args.slice(1));
+    for (var option in nativeOptionsMap) {
+        if (phantom.casperArgs.has(option)) {
+            if (typeof nativeOptionsMap[option] === "undefined") {
+                console.error(f("Warning: casper cannot handle the %s option", option));
+            } else {
+                phantom.defaultPageSettings[nativeOptionsMap[option]] = phantom.casperArgs.get(option);
+            }
+        }
+    }
+
 
     // loaded status
     phantom.casperLoaded = true;
@@ -293,10 +321,7 @@ phantom.initCasperCli = function() {
 
     if (!!phantom.casperArgs.get('version')) {
         console.log(phantom.casperVersion.toString());
-        phantom.exit(0);
-    } else if (phantom.casperArgs.get(0) === "test") {
-        phantom.casperArgs.drop("test");
-        phantom.injectJs(fs.absolute(fs.pathJoin(phantom.casperPath, 'tests', 'run.js')));
+        system.exit(0);
     } else if (!!phantom.casperArgs.get('help')) {
         var phantomVersion = [phantom.version.major, phantom.version.minor, phantom.version.patch].join('.');
         var f = require("utils").format;
@@ -304,7 +329,10 @@ phantom.initCasperCli = function() {
                     phantom.casperVersion.toString(),
                     phantom.casperPath, phantomVersion));
         console.log(fs.read(fs.pathJoin(phantom.casperPath, 'bin', 'usage.txt')));
-        phantom.exit(0);
+        system.exit(0);
+    } else if (phantom.casperArgs.get(0) === "test") {
+        phantom.casperArgs.drop("test");
+        phantom.injectJs(fs.absolute(fs.pathJoin(phantom.casperPath, 'tests', 'run.js')));
     } else if (phantom.casperArgs.args.length > 0) {
         if (!phantom.casperScript) {
             phantom.casperScript = phantom.casperArgs.get(0);
@@ -312,7 +340,7 @@ phantom.initCasperCli = function() {
 
         if (!fs.isFile(phantom.casperScript)) {
             console.error('Unable to open file: ' + phantom.casperScript);
-            phantom.exit(1);
+            system.exit(1);
         }
 
         // filter out the called script name from casper args
@@ -326,8 +354,6 @@ phantom.initCasperCli = function() {
         }
     } else {
         // repl mode
-        console.error("REPL mode is not supported yet.");
-        phantom.exit();
     }
 };
 
@@ -336,7 +362,6 @@ if (!phantom.casperLoaded) {
         phantom.loadCasper();
     } catch (e) {
         console.error("Unable to load casper environment: " + e);
-        phantom.exit();
     }
 }
 
